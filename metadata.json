@@ -1,0 +1,6 @@
+{
+  "name": "SERQI - Sistem E-Rekod Quran Iqra",
+  "description": "Sistem pintar perekodan dan analisis data Al-quran/Iqra dengan integrasi Firebase Firestore untuk pangkalan data guru dan murid yang besar.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
