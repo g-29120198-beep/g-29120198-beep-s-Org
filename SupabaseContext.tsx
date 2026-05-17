@@ -7,6 +7,8 @@ interface SupabaseContextType {
   user: Teacher | null;
   loading: boolean;
   login: () => Promise<void>;
+  loginByEmail: (email: string, password: string) => Promise<void>;
+  signUpByEmail: (email: string, password: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
   students: Student[];
   records: ReadingRecord[];
@@ -30,13 +32,19 @@ export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
+      console.warn("Supabase is not configured yet. Please check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
       setLoading(false);
       return;
     }
 
+    console.log("Initializing Supabase Auth...");
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log("Initial session check:", session ? "Authenticated" : "No session");
       handleAuthChange(session?.user ?? null);
+    }).catch(err => {
+      console.error("Supabase session error:", err);
+    }).finally(() => {
       setLoading(false);
     });
 
@@ -76,13 +84,8 @@ export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Fetch data
   useEffect(() => {
-    if (!user) {
-      setStudents([]);
-      setRecords([]);
-      return;
-    }
-
     const fetchInitialData = async () => {
+      // Fetch students and records regardless of user session (Public read is allowed by RLS)
       const { data: stds } = await supabase.from('students').select('*').order('NAMA_MURID');
       const { data: recs } = await supabase.from('records').select('*').order('timestamp', { ascending: false }).limit(500);
       
@@ -92,7 +95,7 @@ export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     fetchInitialData();
 
-    // Set up real-time (optional, can be added later if needed)
+    // Set up real-time
     const studentsSub = supabase
       .channel('public:students')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, payload => {
@@ -117,13 +120,14 @@ export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       supabase.removeChannel(studentsSub);
       supabase.removeChannel(recordsSub);
     };
-  }, [user]);
+  }, []); // Remove dependency on [user] so it loads for parents too
 
   const login = async () => {
     if (!isSupabaseConfigured) {
       alert("Sila masukkan VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY dalam fail .env anda.");
       return;
     }
+    console.log("Starting Google OAuth login...");
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -131,8 +135,65 @@ export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
     });
     if (error) {
+      console.error("OAuth error:", error);
       setError(error.message);
-      alert("Gagal log masuk: " + error.message);
+      if (error.message.includes("provider is not enabled")) {
+        alert("Ralat: Google Auth tidak diaktifkan di Dashboard Supabase anda.\n\nSila aktifkan 'Google' di Authentication -> Providers, ATAU gunakan pilihan 'Log Masuk Emel' di bawah.");
+      } else {
+        alert("Gagal log masuk Google: " + error.message);
+      }
+    }
+  };
+
+  const loginByEmail = async (email: string, password: string) => {
+    console.log("Attempting email login for:", email);
+    const { error, data } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      console.error("Login error:", error);
+      setError(error.message);
+      if (error.message.includes("Invalid login credentials")) {
+        alert("Ralat Log Masuk: Emel atau kata laluan salah.\n\nSila pastikan anda telah mendaftar akaun terlebih dahulu menggunakan butang 'DAFTAR AKAUN'. Jika sudah mendaftar, pastikan emel & kata laluan adalah tepat.");
+      } else if (error.message.includes("Email not confirmed")) {
+        alert("Emel Belum Disahkan: Sila semak peti masuk emel anda dan klik pautan pengesahan yang dihantar oleh Supabase.");
+      } else {
+        alert("Gagal log masuk: " + error.message);
+      }
+    } else {
+      console.log("Login successful:", data.user?.id);
+    }
+  };
+
+  const signUpByEmail = async (email: string, password: string, name: string) => {
+    console.log("Attempting sign up for:", email);
+    const { error, data } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { full_name: name },
+        emailRedirectTo: window.location.origin
+      }
+    });
+
+    if (error) {
+      console.error("Sign up error:", error);
+      setError(error.message);
+      alert("Gagal mendaftar: " + error.message);
+    } else if (data.user) {
+      console.log("Sign up successful:", data.user.id);
+      
+      // Manually insert into teachers table as well just in case trigger hasn't been set up
+      await supabase.from('teachers').insert([{
+        uid: data.user.id,
+        name: name,
+        email: email,
+        role: 'TEACHER'
+      }]);
+
+      if (data.session) {
+        alert("Pendaftaran berjaya! Anda kini telah log masuk.");
+      } else {
+        alert("Pendaftaran berjaya!\n\nSila SEMAK EMEL anda (" + email + ") untuk pautan pengesahan. Anda mesti klik pautan tersebut sebelum boleh log masuk buat kali pertama.");
+      }
     }
   };
 
@@ -204,7 +265,7 @@ export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   return (
     <SupabaseContext.Provider value={{ 
-      user, loading, login, logout, students, records, 
+      user, loading, login, loginByEmail, signUpByEmail, logout, students, records, 
       addRecord, addStudent, updateStudent, isSyncing, error,
       isConfigValid: isSupabaseConfigured
     }}>

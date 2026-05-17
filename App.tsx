@@ -8,7 +8,10 @@ import {
   Loader2,
   TriangleAlert,
   AlertCircle,
-  LogIn
+  LogIn,
+  Mail,
+  Lock,
+  UserPlus
 } from 'lucide-react';
 import Header from './components/Header';
 import ProgressForm from './components/ProgressForm';
@@ -42,7 +45,7 @@ const fetchWithRetry = async (url: string, options: RequestInit = {}, retries = 
 
 const App: React.FC = () => {
   const { 
-    user, loading, login, logout, 
+    user, loading, login, loginByEmail, signUpByEmail, logout, 
     students: fbStudents, records: fbRecords, 
     addRecord, addStudent: fbAddStudent, updateStudent: fbUpdateStudent,
     isSyncing: fbIsSyncing, error: fbError,
@@ -50,6 +53,11 @@ const App: React.FC = () => {
   } = useSupabase();
 
   const [activeTab, setActiveTab] = useState<Tab>('input');
+  const [authMode, setAuthMode] = useState<'options' | 'login' | 'signup'>('options');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   
@@ -245,6 +253,21 @@ const App: React.FC = () => {
     }
   };
 
+  const handleEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    await loginByEmail(email, password);
+    setIsSubmitting(false);
+  };
+
+  const handleEmailSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    await signUpByEmail(email, password, name);
+    setIsSubmitting(false);
+    setAuthMode('login');
+  };
+
   if (loading) {
     return (
       <div className={`min-h-screen flex items-center justify-center ${isDarkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
@@ -280,23 +303,143 @@ const App: React.FC = () => {
              </div>
            )}
            
-           <div className="space-y-4">
-             <button 
-               onClick={login} 
-               disabled={!isConfigValid}
-               className={`w-full py-6 rounded-3xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl flex items-center justify-center gap-3 transition-all active:scale-95 group ${!isConfigValid ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none border-2 border-slate-100' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
-             >
-               {isConfigValid ? <LogIn size={20} className="group-hover:translate-x-1 transition-transform" /> : <Loader2 size={18} className="animate-spin text-slate-400" />}
-               {isConfigValid ? "LOG MASUK GURU" : "MENUNGGU SUPABASE..."}
-             </button>
-             
-             <button onClick={() => setParentMode(true)} className={`w-full py-6 rounded-3xl font-black text-[10px] uppercase tracking-[0.2em] border-2 transition-all active:scale-95 flex items-center justify-center gap-3 ${isDarkMode ? 'border-slate-800 text-slate-400 hover:bg-slate-800' : 'border-slate-100 text-slate-500 hover:bg-slate-50'}`}>
-                SEMAKAN IBU BAPA
-             </button>
-           </div>
+           {authMode === 'options' ? (
+             <div className="space-y-4">
+               <button 
+                 onClick={login} 
+                 disabled={!isConfigValid}
+                 className={`w-full py-6 rounded-3xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl flex items-center justify-center gap-3 transition-all active:scale-95 group ${!isConfigValid ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none border-2 border-slate-100' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+               >
+                 {isConfigValid ? <LogIn size={20} className="group-hover:translate-x-1 transition-transform" /> : <Loader2 size={18} className="animate-spin text-slate-400" />}
+                 {isConfigValid ? "LOG MASUK GURU (GOOGLE)" : "MENUNGGU SUPABASE..."}
+               </button>
 
-           <div className="pt-4">
-              <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest opacity-50">SK BUKIT RAMBAI © 2024</p>
+               <div className="grid grid-cols-2 gap-4">
+                 <button 
+                   onClick={() => setAuthMode('login')}
+                   disabled={!isConfigValid}
+                   className={`py-6 rounded-3xl font-black text-[9px] uppercase tracking-[0.15em] border transition-all active:scale-95 flex flex-col items-center justify-center gap-2 ${!isConfigValid ? 'border-slate-100 text-slate-200 cursor-not-allowed' : (isDarkMode ? 'border-slate-800 text-slate-400 hover:bg-slate-800' : 'border-slate-100 text-slate-400 hover:bg-slate-50')}`}
+                 >
+                   <Mail size={18} /> <span>LOG MASUK EMEL</span>
+                 </button>
+                 
+                 <button 
+                   onClick={() => setAuthMode('signup')}
+                   disabled={!isConfigValid}
+                   className={`py-6 rounded-3xl font-black text-[9px] uppercase tracking-[0.15em] border transition-all active:scale-95 flex flex-col items-center justify-center gap-2 ${!isConfigValid ? 'border-slate-100 text-slate-200 cursor-not-allowed' : (isDarkMode ? 'border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/10' : 'border-indigo-50 text-indigo-600 hover:bg-indigo-50')}`}
+                 >
+                   <UserPlus size={18} /> <span>DAFTAR AKAUN</span>
+                 </button>
+               </div>
+               
+               <button onClick={() => setParentMode(true)} className={`w-full py-6 rounded-3xl font-black text-[10px] uppercase tracking-[0.2em] border-2 transition-all active:scale-95 flex items-center justify-center gap-3 ${isDarkMode ? 'border-slate-800 text-slate-400 hover:bg-slate-800' : 'border-slate-100 text-slate-500 hover:bg-slate-50'}`}>
+                  SEMAKAN IBU BAPA
+               </button>
+             </div>
+           ) : authMode === 'login' ? (
+             <form onSubmit={handleEmailLogin} className="space-y-4 text-left">
+               <div className="space-y-4">
+                 <div className="relative">
+                   <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                   <input 
+                     type="email" 
+                     placeholder="EMEL GURU"
+                     required
+                     value={email}
+                     onChange={(e) => setEmail(e.target.value)}
+                     className={`w-full py-4 pl-12 pr-4 rounded-2xl text-[10px] font-bold border-2 outline-none transition-all ${isDarkMode ? 'bg-slate-800 border-slate-700 text-white focus:border-indigo-500' : 'bg-slate-50 border-slate-100 focus:border-indigo-500'}`}
+                   />
+                 </div>
+                 <div className="relative">
+                   <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                   <input 
+                     type="password" 
+                     placeholder="KATA LALUAN"
+                     required
+                     value={password}
+                     onChange={(e) => setPassword(e.target.value)}
+                     className={`w-full py-4 pl-12 pr-4 rounded-2xl text-[10px] font-bold border-2 outline-none transition-all ${isDarkMode ? 'bg-slate-800 border-slate-700 text-white focus:border-indigo-500' : 'bg-slate-50 border-slate-100 focus:border-indigo-500'}`}
+                   />
+                 </div>
+               </div>
+               <button 
+                 type="submit"
+                 disabled={isSubmitting}
+                 className="w-full py-5 rounded-2xl bg-indigo-600 text-white font-black text-[10px] uppercase tracking-[0.2em] shadow-lg hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center gap-2"
+               >
+                 {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <LogIn size={16} />}
+                 MASUK
+               </button>
+               <div className="flex justify-between items-center px-2">
+                 <button type="button" onClick={() => setAuthMode('signup')} className="text-[9px] font-black text-indigo-500 uppercase tracking-widest hover:underline">DAFTAR GURU BARU</button>
+                 <button type="button" onClick={() => setAuthMode('options')} className="text-[9px] font-black text-slate-400 uppercase tracking-widest hover:underline">KEMBALI</button>
+               </div>
+             </form>
+           ) : (
+             <form onSubmit={handleEmailSignUp} className="space-y-4 text-left">
+               <div className="space-y-4">
+                 <div className="relative">
+                   <UserPlus size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                   <input 
+                     type="text" 
+                     placeholder="NAMA PENUH GURU"
+                     required
+                     value={name}
+                     onChange={(e) => setName(e.target.value)}
+                     className={`w-full py-4 pl-12 pr-4 rounded-2xl text-[10px] font-bold border-2 outline-none transition-all ${isDarkMode ? 'bg-slate-800 border-slate-700 text-white focus:border-indigo-500' : 'bg-slate-50 border-slate-100 focus:border-indigo-500'}`}
+                   />
+                 </div>
+                 <div className="relative">
+                   <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                   <input 
+                     type="email" 
+                     placeholder="EMEL DELIMA GURU"
+                     required
+                     value={email}
+                     onChange={(e) => setEmail(e.target.value)}
+                     className={`w-full py-4 pl-12 pr-4 rounded-2xl text-[10px] font-bold border-2 outline-none transition-all ${isDarkMode ? 'bg-slate-800 border-slate-700 text-white focus:border-indigo-500' : 'bg-slate-50 border-slate-100 focus:border-indigo-500'}`}
+                   />
+                 </div>
+                 <div className="relative">
+                   <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                   <input 
+                     type="password" 
+                     placeholder="KATA LALUAN"
+                     required
+                     value={password}
+                     onChange={(e) => setPassword(e.target.value)}
+                     className={`w-full py-4 pl-12 pr-4 rounded-2xl text-[10px] font-bold border-2 outline-none transition-all ${isDarkMode ? 'bg-slate-800 border-slate-700 text-white focus:border-indigo-500' : 'bg-slate-50 border-slate-100 focus:border-indigo-500'}`}
+                   />
+                 </div>
+               </div>
+               <button 
+                 type="submit"
+                 disabled={isSubmitting}
+                 className="w-full py-5 rounded-2xl bg-indigo-600 text-white font-black text-[10px] uppercase tracking-[0.2em] shadow-lg hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center gap-2"
+               >
+                 {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
+                 DAFTAR AKAUN
+               </button>
+               <div className="text-center">
+                 <button type="button" onClick={() => setAuthMode('login')} className="text-[9px] font-black text-slate-400 uppercase tracking-widest hover:underline">DAH ADA AKAUN? LOG MASUK</button>
+               </div>
+             </form>
+           )}
+
+           <div className="pt-8 border-t border-slate-100/10 mt-8">
+              <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest opacity-50 mb-4 tracking-[0.5em]">SK BUKIT RAMBAI © 2024</p>
+              
+              <div className="px-6 py-4 rounded-2xl bg-slate-50/5 text-left">
+                <p className={`text-[8px] font-black uppercase tracking-widest mb-2 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Status Sistem:</p>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-1.5 h-1.5 rounded-full ${isConfigValid ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
+                    <span className={`text-[8px] font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                      Konfigurasi: {isConfigValid ? 'Sedia' : 'Ralat'}
+                    </span>
+                  </div>
+                </div>
+              </div>
            </div>
         </div>
       </div>
